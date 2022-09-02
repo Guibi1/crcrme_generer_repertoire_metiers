@@ -3,9 +3,9 @@ import re
 import threading
 import tkinter as tk
 from tkinter import filedialog as fd
-from types import NoneType
 
 # Imports to install
+# > pip install pandas requests bs4 openpyxl
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -106,19 +106,20 @@ def start(excelPathSST: str, excelPathStage: str):
     sectors = getSectors()
     for sector in sectors:
         jobs = {}
-        for jobID in getJobIDsOfSector(sector["id"], sector["value"]):
+        for jobID in getJobIDsOfSector(sector["urlId"], sector["id"]):
             job = getJob(jobID)
             job["questions"] = getStageDataFromExcel(
-                excelStage, sector["value"], job["code"])
+                excelStage, sector["id"], job["id"])
 
-            for skillCode in job["skills"]:
-                job["skills"][skillCode]["risks"] = getSSTDataFromExcel(
-                    excelSST, sector["value"], job["code"], skillCode)
+            for skillIds in job["skills"]:
+                job["skills"][skillIds]["risks"] = getSSTDataFromExcel(
+                    excelSST, sector["id"], job["id"], skillIds)
 
-            jobs[job["code"]] = job
+            jobs[job["id"]] = job
 
-        json[sector["value"]] = {
+        json[sector["id"]] = {
             "name": sector["name"],
+            "id": sector["id"],
             "jobs": jobs,
         }
 
@@ -167,8 +168,8 @@ def getSectors():
     for input in soup.find_all("input", type="checkbox"):
         result.append(
             {
-                "id": input["id"],
-                "value": input["value"],
+                "urlId": input["id"],
+                "id": input["value"],
                 "name": nameRegex.match(input.find_next_sibling("label").text).group(1),
             }
         )
@@ -202,13 +203,13 @@ def getJob(id: str):
     )
     soup = BeautifulSoup(page.content, "html.parser")
 
-    [jobCode, jobName] = soup.find("h2").getText(";", True).split(";")
-    result = {"name": jobName, "code": jobCode, "skills": {}}
+    [jobId, jobName] = soup.find("h2").getText(";", True).split(";")
+    result = {"name": jobName, "id": jobId, "skills": {}}
 
     for header in soup.find_all("thead"):
         titleSearch = titleRegex.search(header.find("th").text)
-        skillCode = titleSearch.group(1)
-        skill = titleSearch.group(2)
+        skillId = titleSearch.group(1)
+        skillName = titleSearch.group(2)
 
         lists = header.find_next_sibling("tbody").find_all("ul")
 
@@ -221,8 +222,8 @@ def getJob(id: str):
         for task in lists[1].find_all("li"):
             tasks.append(cleanUpText(task.text))
 
-        result["skills"][skillCode] = {
-            "name": skill, "code": skillCode, "criteria": criteria, "tasks": tasks}
+        result["skills"][skillId] = {
+            "name": skillName, "id": skillId, "criteria": criteria, "tasks": tasks}
 
     return result
 
@@ -258,7 +259,7 @@ def askExcelPath():
     file = fd.askopenfile(title="Choisir un classeur Excel", filetypes=(
         ("Classeurs Excel", "*.xlsx *.xls"), ("Tous les fichiers", "*.*")))
 
-    if (not isinstance(file, NoneType)):
+    if (file is not None):
         return file.name
     else:
         return ""
@@ -296,7 +297,6 @@ frame.pack()
 
 excelPathStage = tk.StringVar()
 entryStage = tk.Entry(frame, textvariable=excelPathStage)
-entryStage.focus()
 entryStage.pack(side="left")
 
 fileButtonStage = tk.Button(frame, text="Parcourir",
