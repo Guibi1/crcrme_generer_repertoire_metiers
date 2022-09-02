@@ -102,26 +102,26 @@ def start(excelPathSST: str, excelPathStage: str):
         setMessage("Fichier Stage invalide")
         return
 
-    json = {}
+    json = []
     sectors = getSectors()
     for sector in sectors:
-        jobs = {}
+        jobs = []
         for jobID in getJobIDsOfSector(sector["urlId"], sector["id"]):
             job = getJob(jobID)
+            jobs.append(job)
+
             job["questions"] = getStageDataFromExcel(
                 excelStage, sector["id"], job["id"])
 
-            for skillIds in job["skills"]:
-                job["skills"][skillIds]["risks"] = getSSTDataFromExcel(
-                    excelSST, sector["id"], job["id"], skillIds)
+            for skill in job["skills"]:
+                skill["risks"] = getSSTDataFromExcel(
+                    excelSST, sector["id"], job["id"], skill["id"])
 
-            jobs[job["id"]] = job
-
-        json[sector["id"]] = {
+        json.append({
             "name": sector["name"],
             "id": sector["id"],
             "jobs": jobs,
-        }
+        })
 
     saveJson(json, JSON_FILE_PATH)
     setMessage("Tout est fini!")
@@ -135,7 +135,7 @@ def getSSTDataFromExcel(excel: pd.DataFrame, sector, job, skill):
         excel[EXCEL_JOB_HEADER] == int(job)) & (excel[EXCEL_SKILL_HEADER] == int(skill))]
 
     for name, excelHeader in EXCEL_SST_DATA_HEADERS.items():
-        if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "oui"):
+        if row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "oui":
             result.append(name)
 
     return result
@@ -148,7 +148,7 @@ def getStageDataFromExcel(excel: pd.DataFrame, sector, job):
                     & (excel[EXCEL_JOB_HEADER] == int(job))]
 
     for name, excelHeader in EXCEL_STAGE_DATA_HEADERS.items():
-        if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "Oui"):
+        if row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "Oui":
             result.append(name)
 
     return result
@@ -159,7 +159,7 @@ def getSectors():
     '''Returns all the available sectors.'''
     result = []
     nameRegex = re.compile(r"^\d+ - (\D*)$")
-    setMessage("Getting all sectors...")
+    setMessage("Fetching all sectors...")
 
     page = requests.get(
         "http://www1.education.gouv.qc.ca/sections/metiers/index.asp")
@@ -182,7 +182,7 @@ def getJobIDsOfSector(id: str, value: str):
     result = []
     hrefRegex = re.compile(r"^index\.asp\?.*id=(\d+)")
 
-    setMessage(f"Getting all jobs of {id}...")
+    setMessage(f"Fetching all jobs of {id}...")
     page = requests.get(
         f"http://www1.education.gouv.qc.ca/sections/metiers/index.asp?page=recherche&action=search&navSeq=1&{id}={value}"
     )
@@ -204,7 +204,7 @@ def getJob(id: str):
     soup = BeautifulSoup(page.content, "html.parser")
 
     [jobId, jobName] = soup.find("h2").getText(";", True).split(";")
-    result = {"name": jobName, "id": jobId, "skills": {}}
+    result = {"name": jobName, "id": jobId, "skills": []}
 
     for header in soup.find_all("thead"):
         titleSearch = titleRegex.search(header.find("th").text)
@@ -222,8 +222,8 @@ def getJob(id: str):
         for task in lists[1].find_all("li"):
             tasks.append(cleanUpText(task.text))
 
-        result["skills"][skillId] = {
-            "name": skillName, "id": skillId, "criteria": criteria, "tasks": tasks}
+        result["skills"].append(
+            {"name": skillName, "id": skillId, "criteria": criteria, "tasks": tasks})
 
     return result
 
@@ -252,6 +252,7 @@ def saveJson(data: dict, path: str):
 
 
 def setMessage(message: str):
+    print(message)
     currentMessage.set(message)
 
 
