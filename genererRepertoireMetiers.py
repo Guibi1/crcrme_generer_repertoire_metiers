@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 
 
 # Constants
-JSON_FILE_PATH = "jobsData.json"
+JSON_FILE_PATH = "jobs-data.json"
 
 EXCEL_SECTOR_HEADER = "N° secteur"
 EXCEL_JOB_HEADER = "N° métiers"
@@ -130,26 +130,26 @@ def start(excelPathSST: str, excelPathStage: str):
 # Excel readers
 def getSSTDataFromExcel(excel: pd.DataFrame, sector, job, skill):
     '''Returns the corresponding data contained in the SST excel file'''
-    result = {}
+    result = []
     row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector)) & (
         excel[EXCEL_JOB_HEADER] == int(job)) & (excel[EXCEL_SKILL_HEADER] == int(skill))]
 
-    for header, excelHeader in EXCEL_SST_DATA_HEADERS.items():
+    for name, excelHeader in EXCEL_SST_DATA_HEADERS.items():
         if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "oui"):
-            result[header] = True
+            result.append(name)
 
     return result
 
 
 def getStageDataFromExcel(excel: pd.DataFrame, sector, job):
     '''Returns the corresponding data contained in the stage excel file'''
-    result = {}
+    result = []
     row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector))
                     & (excel[EXCEL_JOB_HEADER] == int(job))]
 
-    for header, excelHeader in EXCEL_STAGE_DATA_HEADERS.items():
+    for name, excelHeader in EXCEL_STAGE_DATA_HEADERS.items():
         if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "Oui"):
-            result[header] = True
+            result.append(name)
 
     return result
 
