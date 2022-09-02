@@ -5,69 +5,115 @@ import tkinter as tk
 from tkinter import filedialog as fd
 from types import NoneType
 
+# Imports to install
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
+
+# Constants
 JSON_FILE_PATH = "jobsData.json"
 
 EXCEL_SECTOR_HEADER = "N° secteur"
 EXCEL_JOB_HEADER = "N° métiers"
 EXCEL_SKILL_HEADER = "Numéro de compétences"
 
-EXCEL_DATA_HEADERS = {
-    "chemicalRisks": "1. Risques Chimiques",
-    "biologicalRisks": "2. Risques Biologiques",
-    "equipmentRisks": "3. Risques liés aux machines et aux équipements",
-    "fallRisks": "4. Risques de chutes de hauteur et de plain-pied",
+# Data to change
+EXCEL_SST_DATA_HEADERS = {
+    # json : excel
+    "chemical": "1. Risques Chimiques",
+    "biological": "2. Risques Biologiques",
+    "equipment": "3. Risques liés aux machines et aux équipements",
+    "fall": "4. Risques de chutes de hauteur et de plain-pied",
     "objectFall": "5. Risques liés aux chutes d’objets",
-    "transitRisks": " 6. Risques liés aux déplacements",
-    "postureRisks": " 7. Risques liés aux postures contraignantes",
-    "motionRisks": "8. Risques liés aux mouvements répétitifs, pressions de contact et chocs",
-    "handlingRisks": "9. Risques liés à la manutention",
-    "psycologicalRisks": "10. Risques psychosociaux et de violence",
-    "noiseRisks": "11. Risques liés au bruit",
-    "temperatureRisks": "12. Risques liés à l'Froid et chaleur",
-    "vibrationRisks": "13. Risques liés aux vibrations",
-    "otherRisks": "14. Autres risques (électrique, explosion, travail en espace clos)",
+    "transit": " 6. Risques liés aux déplacements",
+    "posture": " 7. Risques liés aux postures contraignantes",
+    "motion": "8. Risques liés aux mouvements répétitifs, pressions de contact et chocs",
+    "handling": "9. Risques liés à la manutention",
+    "psycological": "10. Risques psychosociaux et de violence",
+    "noise": "11. Risques liés au bruit",
+    "temperature": "12. Risques liés à l'Froid et chaleur",
+    "vibration": "13. Risques liés aux vibrations",
+    "electric": "14.1 Risques électriques",
+    "anoxia": "14.2 Risque anoxie et travail en espace clos",
+    "fire": "14.3 Risque ATEX,  incendie ou explosion",
+    "nanomaterial": "14.4 Risques nanomatériaux ",
+}
+
+EXCEL_STAGE_DATA_HEADERS = {
+    # json : excel
+    "1": "Q1",
+    "2": "Q2",
+    "3": "Q3",
+    "4": "Q4",
+    "5": "Q5",
+    "6": "Q6",
+    "7": "Q7",
+    "8": "Q8",
+    "9": "Q9",
+    "10": "Q10",
+    "11": "Q11",
+    "12": "Q12",
+    "13": "Q13",
+    "14": "Q14",
+    "15": "Q15",
+    "16": "Q16",
+    "17": "Q17",
+    "18": "Q18",
+    "19": "Q19",
+    "20": "Q20",
+    "21": "Q21",
+    "22": "Q22",
+    "23": "Q23",
 }
 
 
+# Main functions
 def run():
     '''Run the main script in a new thread'''
 
     def target():
-        entry["state"] = "disabled"
-        fileButton["state"] = "disabled"
+        entrySST["state"] = "disabled"
+        entryStage["state"] = "disabled"
+        fileButtonSST["state"] = "disabled"
+        fileButtonStage["state"] = "disabled"
         startButton["state"] = "disabled"
-        start(excelPath.get())
-        entry["state"] = "normal"
-        fileButton["state"] = "normal"
+        start(excelPathSST.get(), excelPathStage.get())
+        entrySST["state"] = "normal"
+        entryStage["state"] = "normal"
+        fileButtonSST["state"] = "normal"
+        fileButtonStage["state"] = "normal"
         startButton["state"] = "normal"
 
     threading.Thread(target=target).start()
 
 
-def start(excelPath: str):
+def start(excelPathSST: str, excelPathStage: str):
     '''Starts the main script'''
-    json = {}
-
     try:
-        excel = pd.read_excel(excelPath)
-
+        excelSST = pd.read_excel(excelPathSST)
     except FileNotFoundError:
-        setMessage("Fichier invalide")
+        setMessage("Fichier SST invalide")
         return
 
+    try:
+        excelStage = pd.read_excel(excelPathStage)
+    except FileNotFoundError:
+        setMessage("Fichier Stage invalide")
+        return
+
+    json = {}
     sectors = getSectors()
     for sector in sectors:
         jobs = {}
         for jobID in getJobIDsOfSector(sector["id"], sector["value"]):
             job = getJob(jobID)
+            job["questions"] = getStageDataFromExcel(
+                excelStage, sector["value"], job["code"])
+
             for skillCode in job["skills"]:
-                dataToAdd = getSkillDataFromExcel(
-                    excel, sector["value"], job["code"], skillCode)
-                job["skills"][skillCode].update(dataToAdd)
+                job["skills"][skillCode]["risks"] = getSSTDataFromExcel(
+                    excelSST, sector["value"], job["code"], skillCode)
 
             jobs[job["code"]] = job
 
@@ -80,20 +126,34 @@ def start(excelPath: str):
     setMessage("Tout est fini!")
 
 
-def getSkillDataFromExcel(excel: pd.DataFrame, sector, job, skill):
-    '''Returns the corresponding data contained in the excel file'''
+# Excel readers
+def getSSTDataFromExcel(excel: pd.DataFrame, sector, job, skill):
+    '''Returns the corresponding data contained in the SST excel file'''
     result = {}
     row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector)) & (
         excel[EXCEL_JOB_HEADER] == int(job)) & (excel[EXCEL_SKILL_HEADER] == int(skill))]
 
-    for header, excelHeader in EXCEL_DATA_HEADERS.items():
-        if (row[excelHeader].index.size > 0):
-            result[header] = row[excelHeader].get(
-                row[excelHeader].index[0], None)
+    for header, excelHeader in EXCEL_SST_DATA_HEADERS.items():
+        if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "oui"):
+            result[header] = True
 
     return result
 
 
+def getStageDataFromExcel(excel: pd.DataFrame, sector, job):
+    '''Returns the corresponding data contained in the stage excel file'''
+    result = {}
+    row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector))
+                    & (excel[EXCEL_JOB_HEADER] == int(job))]
+
+    for header, excelHeader in EXCEL_STAGE_DATA_HEADERS.items():
+        if (row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "Oui"):
+            result[header] = True
+
+    return result
+
+
+# Data fetching
 def getSectors():
     '''Returns all the available sectors.'''
     result = []
@@ -167,6 +227,7 @@ def getJob(id: str):
     return result
 
 
+# String processing
 def cleanUpText(text: str):
     '''Removes unwanted formating chars at the end of [text].'''
     return re.match(r"[^\t\r\n]*", text).group(0)
@@ -181,6 +242,7 @@ def cleanUpData(data):
         return data
 
 
+# Utils
 def saveJson(data: dict, path: str):
     '''Saves [json] as a file named [path] formated with an indent of 4.'''
     setMessage("Saving json...")
@@ -197,31 +259,50 @@ def askExcelPath():
         ("Classeurs Excel", "*.xlsx *.xls"), ("Tous les fichiers", "*.*")))
 
     if (not isinstance(file, NoneType)):
-        excelPath.set(file.name)
+        return file.name
+    else:
+        return ""
 
 
 # Tkinter initialisation
 root = tk.Tk()
 root.title("CRCRME - Générer répertoire métiers")
-root.geometry("450x140")
+root.geometry("450x200")
 root.resizable(False, False)
 mainFrame = tk.Frame(root)
 mainFrame.pack(padx=20, pady=20)
 
-label = tk.Label(
-    mainFrame, text="Entrez le chemin d'accès d'un classeur Excel.")
-label.pack()
+
+tk.Label(mainFrame, text="Entrez le chemin d'accès du classeur Excel contenant les informations SST.").pack()
 
 frame = tk.Frame(mainFrame)
 frame.pack()
 
-excelPath = tk.StringVar()
-entry = tk.Entry(frame, textvariable=excelPath)
-entry.focus()
-entry.pack(side="left")
+excelPathSST = tk.StringVar()
+entrySST = tk.Entry(frame, textvariable=excelPathSST)
+entrySST.focus()
+entrySST.pack(side="left")
 
-fileButton = tk.Button(frame, text="Parcourir", command=askExcelPath)
-fileButton.pack(side="right")
+fileButtonSST = tk.Button(frame, text="Parcourir",
+                          command=lambda: excelPathSST.set(askExcelPath()))
+fileButtonSST.pack(side="right")
+
+
+tk.Label(mainFrame, text="Entrez le chemin d'accès du classeur Excel contenant").pack()
+tk.Label(mainFrame, text="les questions à poser lors du formulaire de création de stage.").pack()
+
+frame = tk.Frame(mainFrame)
+frame.pack()
+
+excelPathStage = tk.StringVar()
+entryStage = tk.Entry(frame, textvariable=excelPathStage)
+entryStage.focus()
+entryStage.pack(side="left")
+
+fileButtonStage = tk.Button(frame, text="Parcourir",
+                            command=lambda: excelPathStage.set(askExcelPath()))
+fileButtonStage.pack(side="right")
+
 
 startButton = tk.Button(mainFrame, text="Générer", command=run)
 startButton.pack(side="bottom")
@@ -229,6 +310,7 @@ startButton.pack(side="bottom")
 currentMessage = tk.StringVar()
 messageLabel = tk.Label(mainFrame, textvariable=currentMessage)
 messageLabel.pack(side="bottom")
+
 
 if __name__ == "__main__":
     root.mainloop()
