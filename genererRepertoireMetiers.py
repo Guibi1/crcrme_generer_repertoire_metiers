@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 JSON_FILE_PATH = "jobs-data.json"
 
 EXCEL_SECTOR_HEADER = "N° secteur"
-EXCEL_JOB_HEADER = "N° métiers"
+EXCEL_SPECIALIZATION_HEADER = "N° métiers"
 EXCEL_SKILL_HEADER = "Numéro de compétences"
 
 # Data to change
@@ -105,22 +105,22 @@ def start(excelPathSST: str, excelPathStage: str):
     json = []
     sectors = getSectors()
     for sector in sectors:
-        jobs = []
-        for jobID in getJobIDsOfSector(sector["urlId"], sector["id"]):
-            job = getJob(jobID)
-            jobs.append(job)
+        specializations = []
+        for specializationsID in getSpecializationIDsOfSector(sector["urlId"], sector["id"]):
+            specialization = getSpecialization(specializationsID)
+            specializations.append(specialization)
 
-            job["questions"] = getStageDataFromExcel(
-                excelStage, sector["id"], job["id"])
+            specialization["questions"] = getStageDataFromExcel(
+                excelStage, sector["id"], specialization["id"])
 
-            for skill in job["skills"]:
+            for skill in specialization["skills"]:
                 skill["risks"] = getSSTDataFromExcel(
-                    excelSST, sector["id"], job["id"], skill["id"])
+                    excelSST, sector["id"], specialization["id"], skill["id"])
 
         json.append({
             "name": sector["name"],
             "id": sector["id"],
-            "jobs": jobs,
+            "specializations": specializations,
         })
 
     saveJson(json, JSON_FILE_PATH)
@@ -128,11 +128,11 @@ def start(excelPathSST: str, excelPathStage: str):
 
 
 # Excel readers
-def getSSTDataFromExcel(excel: pd.DataFrame, sector, job, skill):
+def getSSTDataFromExcel(excel: pd.DataFrame, sector, specialization, skill):
     '''Returns the corresponding data contained in the SST excel file'''
     result = []
     row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector)) & (
-        excel[EXCEL_JOB_HEADER] == int(job)) & (excel[EXCEL_SKILL_HEADER] == int(skill))]
+        excel[EXCEL_SPECIALIZATION_HEADER] == int(specialization)) & (excel[EXCEL_SKILL_HEADER] == int(skill))]
 
     for name, excelHeader in EXCEL_SST_DATA_HEADERS.items():
         if row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "oui":
@@ -141,11 +141,11 @@ def getSSTDataFromExcel(excel: pd.DataFrame, sector, job, skill):
     return result
 
 
-def getStageDataFromExcel(excel: pd.DataFrame, sector, job):
+def getStageDataFromExcel(excel: pd.DataFrame, sector, specialization):
     '''Returns the corresponding data contained in the stage excel file'''
     result = []
     row = excel.loc[(excel[EXCEL_SECTOR_HEADER] == int(sector))
-                    & (excel[EXCEL_JOB_HEADER] == int(job))]
+                    & (excel[EXCEL_SPECIALIZATION_HEADER] == int(specialization))]
 
     for name, excelHeader in EXCEL_STAGE_DATA_HEADERS.items():
         if row[excelHeader].index.size > 0 and row[excelHeader].get(row[excelHeader].index[0], "") == "Oui":
@@ -177,25 +177,25 @@ def getSectors():
     return result
 
 
-def getJobIDsOfSector(id: str, value: str):
-    '''Returns all the jobs of a particular sector.'''
+def getSpecializationIDsOfSector(id: str, value: str):
+    '''Returns all the specializations of a particular sector.'''
     result = []
     hrefRegex = re.compile(r"^index\.asp\?.*id=(\d+)")
 
-    setMessage(f"Fetching all jobs of {id}...")
+    setMessage(f"Fetching all specializations of {id}...")
     page = requests.get(
         f"http://www1.education.gouv.qc.ca/sections/metiers/index.asp?page=recherche&action=search&navSeq=1&{id}={value}"
     )
     soup = BeautifulSoup(page.content, "html.parser")
 
-    for job in soup.find_all("a", href=hrefRegex):
-        result.append(hrefRegex.match(job["href"]).group(1))
+    for specialization in soup.find_all("a", href=hrefRegex):
+        result.append(hrefRegex.match(specialization["href"]).group(1))
 
     return result
 
 
-def getJob(id: str):
-    '''Returns a detailed job.'''
+def getSpecialization(id: str):
+    '''Returns a detailed specialization.'''
     titleRegex = re.compile(r"(\d+) - ([^\t\r\n]*)")
 
     page = requests.get(
@@ -203,8 +203,9 @@ def getJob(id: str):
     )
     soup = BeautifulSoup(page.content, "html.parser")
 
-    [jobId, jobName] = soup.find("h2").getText(";", True).split(";")
-    result = {"name": jobName, "id": jobId, "skills": []}
+    [specializationId, specializationName] = soup.find(
+        "h2").getText(";", True).split(";")
+    result = {"name": specializationName, "id": specializationId, "skills": []}
 
     for header in soup.find_all("thead"):
         titleSearch = titleRegex.search(header.find("th").text)
