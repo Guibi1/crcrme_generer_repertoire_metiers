@@ -215,12 +215,11 @@ def getJob(id: str):
 
         criteria = []
         for criterion in lists[0].find_all("li"):
-            criteria.append(
-                cleanUpText(criterion.text))
+            criteria.append(criterion.text)
 
         tasks = []
         for task in lists[1].find_all("li"):
-            tasks.append(cleanUpText(task.text))
+            tasks.append(task.text)
 
         result["skills"].append(
             {"name": skillName, "id": skillId, "criteria": criteria, "tasks": tasks})
@@ -231,7 +230,10 @@ def getJob(id: str):
 # String processing
 def cleanUpText(text: str):
     '''Removes unwanted formating chars at the end of [text].'''
-    return re.match(r"[^\t\r\n]*", text).group(0)
+    text = re.match(r"[^\t\r\n]*", text).group(0)
+    text = text.replace("\u009c", "oe")
+    text = text.replace("\u0092", "'")
+    return text
 
 
 def cleanUpData(data):
@@ -239,6 +241,8 @@ def cleanUpData(data):
         return [cleanUpData(x) for x in data if x is not None]
     elif isinstance(data, dict):
         return {key: cleanUpData(val) for key, val in data.items() if val is not None}
+    elif isinstance(data, str):
+        return cleanUpText(data)
     else:
         return data
 
